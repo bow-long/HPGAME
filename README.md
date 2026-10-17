@@ -38,12 +38,12 @@ and mixed precision. Run `python train_model.py`; the best weights are saved
 to `runs/detect/blue_led/weights/best.pt`. Run the tracker with
 `python main.py`.
 
-## Shape tracing game
+## Shape tracing mini-game
 
-Run `python shape_tracing_game.py` to play with the trained blue LED model.
-The webcam preview is mirrored. Trace a square, triangle, and circle using the
-LED; press **Space** to start each 20-second round. Each grade is based on
-average distance from the target outline and how much of that outline you
-traced within the allowed tolerance. Grades are A (90+), B (80+), C (70+),
-D (60+), and F (below 60). Press **R** on the results screen to play again,
-or **Esc** to exit.
+Run `python shape_tracing_game.py` to trace a square, triangle, and circle
+with the trained LED detector. Each shape has a 20-second limit. Press
+**Space** to start a round, return the LED to the starting point to finish
+early, and press **R** on the results screen to play again. Press **Esc** or
+**Q** to quit. Webcam frames are flipped horizontally to provide a mirrored
+view. The A/B/C/D/F grade is based on distance from and coverage of the
+target outline; finishing quickly does not increase the accuracy score.
