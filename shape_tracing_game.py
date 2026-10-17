@@ -13,8 +13,9 @@ INFERENCE_SIZE = 640
 SHAPES = ("Square", "Triangle", "Circle")
 TIME_PER_SHAPE_SECONDS = 20
 TRACE_TOLERANCE_FRACTION = 0.08
+CURSOR_TRAIL_LENGTH = 500
 MIN_TRACE_STEP = 3
-SELF_OVERLAP_RADIUS = 12
+CLOSE_PATH_RADIUS = 12
 CLOSE_PATH_FRACTION = 0.65
 WINDOW_NAME = "Blue LED Shape Tracing"
 
@@ -103,8 +104,14 @@ def trace_length(points):
         float(np.linalg.norm(np.asarray(end) - start))
         for start, end in zip(points, points[1:])
     )
-def score_round(accuracy):
-    return float(np.clip(accuracy, 0.0, 100.0))
+
+
+def score_round(accuracy, elapsed_seconds):
+    seconds_saved = max(0.0, TIME_PER_SHAPE_SECONDS - elapsed_seconds)
+    score = min(100.0, accuracy + seconds_saved * 0.5)
+    if elapsed_seconds < 10:
+        score = max(90.0, score)
+    return score, seconds_saved * 0.5
 
 
 def grade_for_score(score):
@@ -192,8 +199,7 @@ def main():
     target_contour = None
     target_display = None
     trace_points = deque()
-    live_trail = deque(maxlen=2)
-    trail_layer = None
+    live_trail = []
     results_by_shape = []
     final_results_started = 0.0
     round_notice = ""
@@ -208,26 +214,15 @@ def main():
             frame = cv.flip(raw_frame, 1)
             height, width = frame.shape[:2]
             display = frame.copy()
-            if trail_layer is None or trail_layer.shape != frame.shape:
-                trail_layer = np.zeros_like(frame)
             now = time.monotonic()
             cursor = detect_led(model, frame)
 
             if phase == "playing":
                 round_end_reason = None
                 if cursor is not None:
-                    if live_trail:
-                        previous_cursor = live_trail[-1]
-                        if np.linalg.norm(np.asarray(cursor) - previous_cursor) < 80:
-                            cv.line(
-                                trail_layer,
-                                previous_cursor,
-                                cursor,
-                                (0, 255, 255),
-                                3,
-                                cv.LINE_AA,
-                            )
                     live_trail.append(cursor)
+                    if len(live_trail) > CURSOR_TRAIL_LENGTH:
+                        del live_trail[:-CURSOR_TRAIL_LENGTH]
                     if (
                         not trace_points
                         or np.linalg.norm(
@@ -242,14 +237,12 @@ def main():
                                 np.linalg.norm(
                                     np.asarray(cursor) - trace_points[0]
                                 )
-                                <= SELF_OVERLAP_RADIUS
+                                <= CLOSE_PATH_RADIUS
                                 and trace_length(trace_points)
                                 >= outline_length * CLOSE_PATH_FRACTION
                             )
                             if returned_to_start:
                                 round_end_reason = "Closed the shape"
-                else:
-                    live_trail.clear()
 
                 cv.polylines(
                     display,
@@ -268,7 +261,10 @@ def main():
                         2,
                         cv.LINE_AA,
                     )
-                cv.add(display, trail_layer, dst=display)
+                if len(live_trail) > 1:
+                    for start, end in zip(live_trail, live_trail[1:]):
+                        if np.linalg.norm(np.asarray(end) - start) < 80:
+                            cv.line(display, start, end, (0, 255, 255), 3, cv.LINE_AA)
                 if cursor is not None:
                     cv.circle(display, cursor, 8, (0, 0, 255), -1, cv.LINE_AA)
 
@@ -295,7 +291,7 @@ def main():
                 )
                 cv.putText(
                     display,
-                    "Return to your start to finish early; line crossings are allowed",
+                    "Close at your start to finish early",
                     (15, height - 16),
                     cv.FONT_HERSHEY_SIMPLEX,
                     0.45,
@@ -304,6 +300,7 @@ def main():
                     cv.LINE_AA,
                 )
 
+                elapsed = min(TIME_PER_SHAPE_SECONDS, now - phase_started)
                 if remaining <= 0 and round_end_reason is None:
                     round_end_reason = "Time expired"
 
@@ -314,13 +311,14 @@ def main():
                         target_contour,
                         tolerance,
                     )
-                    score = score_round(accuracy)
+                    score, speed_bonus = score_round(accuracy, elapsed)
                     results_by_shape.append(
                         (
                             SHAPES[shape_index],
                             score,
                             accuracy,
                             coverage,
+                            speed_bonus,
                             round_end_reason,
                         )
                     )
@@ -331,7 +329,6 @@ def main():
                     notice_until = now + 2.0
                     shape_index += 1
                     live_trail.clear()
-                    trail_layer.fill(0)
                     trace_points.clear()
                     if shape_index >= len(SHAPES):
                         phase = "results"
@@ -370,12 +367,12 @@ def main():
                 put_centered_text(display, "GAME OVER", 70, 1.1, (0, 255, 255))
                 for index, result in enumerate(results_by_shape):
                     name, score, accuracy = result[:3]
-                    coverage, reason = result[3:]
+                    coverage, speed_bonus, reason = result[3:]
                     grade = grade_for_score(score)
                     message = (
                         f"{name}: {grade}  |  Score {score:.0f}%  |  "
-                        f"Trace {accuracy:.0f}%  |  "
-                        f"Line coverage {coverage:.0%}  |  {reason}"
+                        f"Trace {accuracy:.0f}% + speed {speed_bonus:.1f}  |  "
+                        f"Covered {coverage:.0%}  |  {reason}"
                     )
                     put_centered_text(
                         display,
@@ -413,7 +410,9 @@ def main():
                     )
 
             cv.imshow(WINDOW_NAME, display)
-            key = cv.waitKey(1) & 0xFF
+            key = cv.waitKeyEx(1)
+            if key >= 0:
+                key &= 0xFF
 
             if key in (27, ord("q"), ord("Q")):
                 break
@@ -425,7 +424,6 @@ def main():
                 )
                 trace_points.clear()
                 live_trail.clear()
-                trail_layer.fill(0)
                 phase_started = time.monotonic()
                 phase = "playing"
             elif phase == "results" and key in (ord("r"), ord("R")):
