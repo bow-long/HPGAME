@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hp-shape-tracing-game"
+version = "0.1.0"
+description = "A CPU-powered webcam shape tracing game"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python",
+    "ultralytics",
+]
+
+[project.scripts]
+shape-tracing-game = "shape_tracing_game:main"
+
+[tool.setuptools]
+py-modules = ["shape_tracing_game"]
+
+[tool.setuptools.data-files]
+"share/hp-shape-tracing" = ["runs/detect/blue_led/weights/best.pt"]

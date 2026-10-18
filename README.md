@@ -40,10 +40,15 @@ to `runs/detect/blue_led/weights/best.pt`. Run the tracker with
 
 ## Shape tracing mini-game
 
-Run `python shape_tracing_game.py` to trace a square, triangle, and circle
-with the trained LED detector. Each shape has a 20-second limit. Press
-**Space** to start a round, return the LED to the starting point to finish
-early, and press **R** on the results screen to play again. Press **Esc** or
-**Q** to quit. Webcam frames are flipped horizontally to provide a mirrored
-view. The A/B/C/D/F grade is based on distance from and coverage of the
-target outline; finishing quickly does not increase the accuracy score.
+Install the runnable game and its dependencies with `python -m pip install .`.
+The installation includes the trained LED detector model and forces inference
+onto the CPU, so the game does not require CUDA or an NVIDIA GPU. Start it with
+`shape-tracing-game` (or run `python shape_tracing_game.py` from the repository).
+
+Trace a square, triangle, and circle with the trained LED detector. Each shape
+has a 20-second limit. Press **Space** to start a round, return the LED to the
+starting point to finish early, and press **R** on the results screen to play
+again. Press **Esc** or **Q** to quit. Webcam frames are flipped horizontally
+to provide a mirrored view. The A/B/C/D/F grade is based on distance from and
+coverage of the target outline; finishing quickly does not increase the
+accuracy score.

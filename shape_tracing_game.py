@@ -1,5 +1,6 @@
 from collections import deque
 from pathlib import Path
+import sysconfig
 import time
 
 import cv2 as cv
@@ -8,6 +9,12 @@ import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "runs" / "detect" / "blue_led" / "weights" / "best.pt"
+INSTALLED_MODEL_PATH = (
+    Path(sysconfig.get_path("data"))
+    / "share"
+    / "hp-shape-tracing"
+    / "best.pt"
+)
 CONFIDENCE_THRESHOLD = 0.25
 INFERENCE_SIZE = 640
 SHAPES = (
@@ -188,7 +195,7 @@ def detect_wand(model, frame):
         frame,
         conf=CONFIDENCE_THRESHOLD,
         imgsz=INFERENCE_SIZE,
-        device=0,
+        device="cpu",
         verbose=False,
     )
     if not results or results[0].boxes is None or len(results[0].boxes) == 0:
@@ -237,9 +244,18 @@ def put_centered_text(image, text, y, scale=0.8, color=(255, 255, 255)):
 
 
 def main():
-    if not MODEL_PATH.is_file():
+    model_path = next(
+        (
+            path
+            for path in (MODEL_PATH, INSTALLED_MODEL_PATH)
+            if path.is_file()
+        ),
+        None,
+    )
+    if model_path is None:
         raise FileNotFoundError(
-            f"Magic wand tracking model not found: {MODEL_PATH}"
+            "Magic wand tracking model not found. Install the project with "
+            "'pip install .' or restore runs/detect/blue_led/weights/best.pt."
         )
 
     try:
@@ -250,7 +266,7 @@ def main():
             "'pip install -r requirements.txt'."
         ) from error
 
-    model = YOLO(str(MODEL_PATH))
+    model = YOLO(str(model_path))
     cap = cv.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("Could not open the webcam.")
@@ -283,6 +299,8 @@ def main():
             cursor = detect_wand(model, frame)
 
             if phase == "playing":
+                if target_contour is None or target_display is None:
+                    raise RuntimeError("The active shape was not initialized.")
                 round_end_reason = None
                 if cursor is not None:
                     live_trail.append(cursor)
